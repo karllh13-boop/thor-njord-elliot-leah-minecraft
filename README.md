@@ -2,6 +2,8 @@
 
 An original browser-based voxel sandbox made for four young explorers.
 
+The world streams outward in procedural chunks as the player explores. A four-minute day/night cycle drives sunrise, daylight, sunset, moonlight, stars, and hostile Nightlings. Nightlings can be attacked with the normal mine control, damage the player's five-heart health bar on contact, and retreat at sunrise.
+
 ## Play online
 
 Open the public game link in landscape orientation on a phone, tablet, or computer. Touch controls appear automatically on mobile devices.

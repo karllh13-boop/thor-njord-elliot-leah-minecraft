@@ -106,6 +106,39 @@ with sync_playwright() as p:
     assert water_state["state"]["playerInWater"]
     assert water_state["position"][1] >= 2.1
 
+    # Walking into the distance generates new chunks while keeping the active set bounded.
+    initial_world = page.evaluate("__BLOCKWORLD_DEBUG__.state()")
+    page.evaluate("__BLOCKWORLD_DEBUG__.teleport(84, 36)")
+    page.wait_for_timeout(450)
+    expanded_world = page.evaluate("__BLOCKWORLD_DEBUG__.state()")
+    assert expanded_world["generatedChunks"] > initial_world["generatedChunks"]
+    assert expanded_world["worldBlocks"] > initial_world["worldBlocks"]
+    assert expanded_world["activeChunks"] <= 25
+    page.evaluate("__BLOCKWORLD_DEBUG__.teleport(0, 0)")
+    page.wait_for_timeout(250)
+
+    # Midnight changes the sky/HUD and spawns hostile Nightlings.
+    page.evaluate("__BLOCKWORLD_DEBUG__.setTime(.75)")
+    page.wait_for_timeout(500)
+    night_state = page.evaluate("__BLOCKWORLD_DEBUG__.state()")
+    assert night_state["nightActive"]
+    assert night_state["monsters"] >= 1
+    assert page.locator("#time-display").get_attribute("class").endswith("night")
+    assert "show" in page.locator("#danger-banner").get_attribute("class")
+    page.screenshot(path=str(OUT / "phone-night.png"), full_page=True)
+
+    # MINE attacks a centered Nightling and sunrise removes every remaining monster.
+    page.evaluate("__BLOCKWORLD_DEBUG__.setView(0, 0); __BLOCKWORLD_DEBUG__.spawnMonsterAhead()")
+    page.wait_for_timeout(100)
+    assert page.evaluate("__BLOCKWORLD_DEBUG__.monsterHealth()") == [3]
+    page.locator("#touch-mine").tap()
+    page.wait_for_timeout(100)
+    assert page.evaluate("__BLOCKWORLD_DEBUG__.monsterHealth()[0]") == 2
+    page.evaluate("__BLOCKWORLD_DEBUG__.setTime(.08)")
+    page.wait_for_timeout(150)
+    assert page.evaluate("__BLOCKWORLD_DEBUG__.state().monsters") == 0
+    assert "show" not in page.locator("#danger-banner").get_attribute("class")
+
     # Camera and block palette controls.
     camera_before = page.evaluate("__BLOCKWORLD_DEBUG__.view().thirdPerson")
     page.locator("#touch-camera").tap()
@@ -127,6 +160,6 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT / "phone-landscape.png"), full_page=True)
 
     assert not errors, "Browser errors:\n" + "\n".join(errors)
-    print("PASS: four-way joystick, swipe-look, buffered jump, water float, camera, hotbar, help, and rotation")
+    print("PASS: touch controls, water float, chunk streaming, day/night, Nightling combat, sunrise, HUD, and rotation")
     context.close()
     browser.close()
