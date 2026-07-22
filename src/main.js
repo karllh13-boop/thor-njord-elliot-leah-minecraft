@@ -81,6 +81,11 @@ let health = 5;
 let damageCooldown = 0;
 let nextMonsterSpawn = 0;
 const monsters = [];
+const horizontalVelocity = new THREE.Vector2();
+let bobPhase = 0;
+let landingKick = 0;
+let wasGrounded = false;
+let viewSwing = 0;
 
 const canvas = document.querySelector('#game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -98,6 +103,7 @@ scene.fog = new THREE.Fog(0x9eddf2, 22, 66);
 
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 120);
 camera.rotation.order = 'YXZ';
+scene.add(camera);
 
 const hemisphere = new THREE.HemisphereLight(0xc9efff, 0x6f7c4e, 2.1);
 scene.add(hemisphere);
@@ -150,6 +156,9 @@ const monsterGroup = new THREE.Group();
 scene.add(monsterGroup);
 const lootGroup = new THREE.Group();
 scene.add(lootGroup);
+const particleGroup = new THREE.Group();
+scene.add(particleGroup);
+const blockParticles = [];
 
 const targetOutline = new THREE.LineSegments(
   new THREE.EdgesGeometry(new THREE.BoxGeometry(1.04, 1.04, 1.04)),
@@ -385,6 +394,7 @@ function collectLootCache(cache) {
     inventory.stone += 2;
   } else {
     equippedTool = cache.tool;
+    buildFirstPersonModel();
   }
   setupHotbar();
   renderPack();
@@ -458,13 +468,119 @@ function makeClouds() {
 
 const player = {
   position: new THREE.Vector3(0, 8, 8),
-  radius: .3,
+  radius: .31,
   height: 1.72,
 };
+
+function isSolidBlock(type) {
+  return Boolean(type && type !== 'water');
+}
+
+function collidesAt(position) {
+  const epsilon = .002;
+  const minX = position.x - player.radius;
+  const maxX = position.x + player.radius;
+  const minY = position.y + .02;
+  const maxY = position.y + player.height - .02;
+  const minZ = position.z - player.radius;
+  const maxZ = position.z + player.radius;
+  const startX = Math.ceil(minX - .5);
+  const endX = Math.floor(maxX + .5);
+  const startY = Math.ceil(minY - .5);
+  const endY = Math.floor(maxY + .5);
+  const startZ = Math.ceil(minZ - .5);
+  const endZ = Math.floor(maxZ + .5);
+
+  for (let x = startX; x <= endX; x++) for (let y = startY; y <= endY; y++) for (let z = startZ; z <= endZ; z++) {
+    if (!isSolidBlock(getBlock(x, y, z))) continue;
+    if (
+      maxX > x - .5 + epsilon && minX < x + .5 - epsilon &&
+      maxY > y - .5 + epsilon && minY < y + .5 - epsilon &&
+      maxZ > z - .5 + epsilon && minZ < z + .5 - epsilon
+    ) return true;
+  }
+  return false;
+}
+
+function hasGroundSupport(position = player.position) {
+  const probe = position.clone();
+  probe.y -= .075;
+  return collidesAt(probe);
+}
+
+function moveHorizontalAxis(axis, amount) {
+  if (Math.abs(amount) < .00001) return;
+  const candidate = player.position.clone();
+  candidate[axis] += amount;
+  if (!collidesAt(candidate)) {
+    player.position[axis] = candidate[axis];
+    return;
+  }
+
+  if (grounded) {
+    const stepped = candidate.clone();
+    stepped.y += 1.001;
+    if (!collidesAt(stepped) && hasGroundSupport(stepped)) {
+      player.position.copy(stepped);
+      return;
+    }
+  }
+  if (axis === 'x') horizontalVelocity.x = 0;
+  else horizontalVelocity.y = 0;
+}
+
+function moveVertical(amount) {
+  grounded = false;
+  if (Math.abs(amount) < .00001) {
+    grounded = hasGroundSupport();
+    return;
+  }
+  const steps = Math.max(1, Math.ceil(Math.abs(amount) / .075));
+  const step = amount / steps;
+  for (let i = 0; i < steps; i++) {
+    const candidate = player.position.clone();
+    candidate.y += step;
+    if (collidesAt(candidate)) {
+      if (step < 0) grounded = true;
+      verticalVelocity = 0;
+      return;
+    }
+    player.position.y = candidate.y;
+  }
+  grounded = hasGroundSupport();
+}
 
 const avatar3D = new THREE.Group();
 scene.add(avatar3D);
 let leftArm, rightArm, leftLeg, rightLeg;
+const firstPersonRig = new THREE.Group();
+camera.add(firstPersonRig);
+
+function buildFirstPersonModel() {
+  firstPersonRig.clear();
+  const skin = selectedCharacter?.skin || '#e8ad7e';
+  const flatMaterial = (color) => new THREE.MeshBasicMaterial({ color: new THREE.Color(color), depthTest: false, depthWrite: false });
+  const part = (geometry, material, x, y, z) => {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.renderOrder = 1000;
+    firstPersonRig.add(mesh);
+    return mesh;
+  };
+  const arm = part(new THREE.BoxGeometry(.18, .52, .2), flatMaterial(skin), .5, -.42, -.78);
+  arm.rotation.set(-.48, 0, -.28);
+
+  if (equippedTool !== 'hands') {
+    const handle = part(new THREE.BoxGeometry(.075, .58, .075), flatMaterial('#8b5a32'), .35, -.27, -.78);
+    handle.rotation.z = -.52;
+    const headColor = equippedTool === 'wood_pick' || equippedTool === 'axe' ? '#9b693b' : '#7f8a8e';
+    const isSword = equippedTool === 'sword';
+    const headGeometry = isSword ? new THREE.BoxGeometry(.09, .58, .08) : equippedTool === 'axe' ? new THREE.BoxGeometry(.32, .25, .08) : new THREE.BoxGeometry(.38, .11, .09);
+    const head = part(headGeometry, flatMaterial(headColor), isSword ? .19 : .17, isSword ? -.04 : -.05, -.78);
+    head.rotation.z = isSword ? -.52 : 0;
+  }
+  firstPersonRig.position.set(0, 0, 0);
+}
 
 function makeAvatar(character) {
   avatar3D.clear();
@@ -482,6 +598,7 @@ function makeAvatar(character) {
   part(.18,.24,.22,character.skin,.38,.48,0);
   leftLeg = part(.24,.58,.28,character.pants,-.16,.31,0);
   rightLeg = part(.24,.58,.28,character.pants,.16,.31,0);
+  buildFirstPersonModel();
 }
 
 function createNightling(x, z) {
@@ -643,6 +760,9 @@ function respawn() {
   const ground = highestSolidAt(0, 0);
   player.position.set(0, ground + .51, 0);
   verticalVelocity = 0;
+  horizontalVelocity.set(0, 0);
+  grounded = true;
+  wasGrounded = true;
   health = 5;
   updateHealthHud();
 }
@@ -774,6 +894,7 @@ function craftRecipe(recipeId) {
     ownedTools.add(recipe.tool);
     equippedTool = recipe.tool;
     updatePackButton();
+    buildFirstPersonModel();
   }
   setupHotbar();
   renderPack();
@@ -785,6 +906,7 @@ function equipTool(toolId) {
   if (!ownedTools.has(toolId)) return;
   equippedTool = toolId;
   updatePackButton();
+  buildFirstPersonModel();
   renderPack();
   saveProgress();
   showToast(`${TOOL_DEFS[toolId].name} equipped`);
@@ -1072,7 +1194,49 @@ function updateTargeting(elapsed) {
   }
 }
 
+function triggerViewSwing() {
+  viewSwing = 1;
+}
+
+function spawnBlockParticles(hit, type) {
+  if (!hit?.point || !BLOCKS[type]) return;
+  const color = BLOCKS[type].color;
+  for (let i = 0; i < 7; i++) {
+    const material = new THREE.MeshBasicMaterial({ color, transparent: true });
+    const particle = new THREE.Mesh(new THREE.BoxGeometry(.09, .09, .09), material);
+    particle.position.copy(hit.point);
+    const normal = hit.face?.normal || new THREE.Vector3(0, 1, 0);
+    particle.position.addScaledVector(normal, .08);
+    const velocity = new THREE.Vector3(
+      normal.x * .8 + (Math.random() - .5) * 1.6,
+      .8 + Math.random() * 1.2,
+      normal.z * .8 + (Math.random() - .5) * 1.6,
+    );
+    particleGroup.add(particle);
+    blockParticles.push({ mesh: particle, velocity, life: .46 + Math.random() * .22 });
+  }
+}
+
+function updateBlockParticles(dt) {
+  for (let i = blockParticles.length - 1; i >= 0; i--) {
+    const particle = blockParticles[i];
+    particle.life -= dt;
+    particle.velocity.y -= 5.5 * dt;
+    particle.mesh.position.addScaledVector(particle.velocity, dt);
+    particle.mesh.rotation.x += dt * 7;
+    particle.mesh.rotation.y += dt * 5;
+    particle.mesh.material.opacity = Math.max(0, particle.life * 2);
+    if (particle.life <= 0) {
+      particleGroup.remove(particle.mesh);
+      particle.mesh.geometry.dispose();
+      particle.mesh.material.dispose();
+      blockParticles.splice(i, 1);
+    }
+  }
+}
+
 function mineBlock() {
+  triggerViewSwing();
   raycaster.far = TOOL_DEFS[equippedTool].reach;
   raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
   const monsterHit = raycaster.intersectObjects(monsterGroup.children, true)[0];
@@ -1085,6 +1249,7 @@ function mineBlock() {
   if (!hit) { showToast('Aim the crosshair at a block'); return; }
   if (hit.object.userData.type === 'water') { showToast('Water cannot be mined'); return; }
   const {x,y,z,type} = hit.object.userData;
+  spawnBlockParticles(hit, type);
   world.delete(key(x,y,z));
   refreshAround(x,y,z);
   let amount = 1;
@@ -1100,6 +1265,7 @@ function mineBlock() {
 }
 
 function placeBlock() {
+  triggerViewSwing();
   const hit = aimedBlock();
   if (!hit || !hit.face) { showToast('Aim the crosshair at a block'); return; }
   const type = PLACEABLE[selectedBlock];
@@ -1110,6 +1276,7 @@ function placeBlock() {
   const existing = getBlock(pos.x, pos.y, pos.z);
   if (existing && existing !== 'water') { showToast('That space is already filled'); return; }
   setBlock(pos.x,pos.y,pos.z,type);
+  spawnBlockParticles(hit, type);
   refreshAround(pos.x,pos.y,pos.z);
   inventory[type]--;
   setupHotbar();
@@ -1125,46 +1292,71 @@ function updatePlayer(dt, elapsed) {
     (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + touchMove.y
   );
   if (input.lengthSq() > 1) input.normalize();
-  const speed = keys.ShiftLeft || keys.ShiftRight || (isTouchDevice && touchMove.length() > .88) ? 6.4 : 4.25;
+  const isSprinting = keys.ShiftLeft || keys.ShiftRight || (isTouchDevice && touchMove.length() > .88);
+  const speed = isSprinting ? 6.15 : 4.3;
   const sin = Math.sin(yaw), cos = Math.cos(yaw);
-  const dx = (input.x * cos - input.y * sin) * speed * dt;
-  const dz = (-input.x * sin - input.y * cos) * speed * dt;
-  const oldX = player.position.x, oldZ = player.position.z;
-  const oldGround = highestSolidAt(oldX, oldZ, player.position.y + 1);
-  const nextGroundX = highestSolidAt(oldX + dx, oldZ, player.position.y + 1);
-  if (nextGroundX <= oldGround + 1 || player.position.y > nextGroundX + 1.4) player.position.x += dx;
-  const nextGroundZ = highestSolidAt(player.position.x, oldZ + dz, player.position.y + 1);
-  if (nextGroundZ <= oldGround + 1 || player.position.y > nextGroundZ + 1.4) player.position.z += dz;
+  const targetVX = (input.x * cos - input.y * sin) * speed;
+  const targetVZ = (-input.x * sin - input.y * cos) * speed;
+
+  grounded = hasGroundSupport();
+  playerInWater = getBlock(Math.round(player.position.x), WATER_LEVEL, Math.round(player.position.z)) === 'water' && player.position.y < WATER_LEVEL + .55;
+  const acceleration = grounded ? 15 : playerInWater ? 8 : 4.5;
+  horizontalVelocity.x = THREE.MathUtils.damp(horizontalVelocity.x, targetVX, acceleration, dt);
+  horizontalVelocity.y = THREE.MathUtils.damp(horizontalVelocity.y, targetVZ, acceleration, dt);
+  if (input.lengthSq() < .001 && grounded) {
+    horizontalVelocity.x = THREE.MathUtils.damp(horizontalVelocity.x, 0, 19, dt);
+    horizontalVelocity.y = THREE.MathUtils.damp(horizontalVelocity.y, 0, 19, dt);
+  }
+
+  if ((keys.Space || performance.now() < jumpQueuedUntil) && (grounded || playerInWater)) {
+    verticalVelocity = playerInWater ? 5.5 : 7.25;
+    grounded = false;
+    jumpQueuedUntil = 0;
+  }
+
+  moveHorizontalAxis('x', horizontalVelocity.x * dt);
+  moveHorizontalAxis('z', horizontalVelocity.y * dt);
 
   updateWorldChunks();
 
-  const groundBlock = highestSolidAt(player.position.x, player.position.z, player.position.y + .2);
-  playerInWater = getBlock(Math.round(player.position.x), WATER_LEVEL, Math.round(player.position.z)) === 'water';
+  verticalVelocity -= (playerInWater ? 5.5 : 19.5) * dt;
+  moveVertical(verticalVelocity * dt);
   const waterFloatY = WATER_LEVEL + .2 + Math.sin(elapsed * 2.4) * .025;
-  const groundY = playerInWater ? Math.max(groundBlock + .51, waterFloatY) : groundBlock + .51;
-  grounded = player.position.y <= groundY + .06 && verticalVelocity <= 0;
-  if (grounded) {
-    player.position.y = groundY;
+  if (playerInWater && player.position.y < waterFloatY && verticalVelocity <= 0) {
+    player.position.y = waterFloatY;
     verticalVelocity = 0;
-    if (keys.Space || performance.now() < jumpQueuedUntil) {
-      verticalVelocity = playerInWater ? 5.6 : 7.1;
-      grounded = false;
-      jumpQueuedUntil = 0;
-    }
-  } else {
-    verticalVelocity -= 18 * dt;
-    player.position.y += verticalVelocity * dt;
-    if (verticalVelocity <= 0 && player.position.y <= groundY) { player.position.y = groundY; verticalVelocity = 0; grounded = true; }
+    grounded = true;
   }
   if (player.position.y < -12) respawn();
 
-  const moving = input.lengthSq() > .01;
+  const planarSpeed = horizontalVelocity.length();
+  const moving = planarSpeed > .12;
+  if (!wasGrounded && grounded) landingKick = Math.min(.11, Math.abs(verticalVelocity) * .012 + .055);
+  landingKick = THREE.MathUtils.damp(landingKick, 0, 9, dt);
+  if (moving && grounded) bobPhase += dt * (isSprinting ? 13 : 10);
+  const bobStrength = moving && grounded ? Math.min(1, planarSpeed / 4.3) : 0;
+  const bobY = Math.abs(Math.sin(bobPhase)) * .045 * bobStrength;
+  const bobX = Math.cos(bobPhase * .5) * .026 * bobStrength;
+
   avatar3D.position.copy(player.position);
   avatar3D.rotation.y = yaw;
   if (leftArm) {
-    const swing = moving && grounded ? Math.sin(elapsed * 10 * (speed/4.25)) * .65 : 0;
+    const swing = moving && grounded ? Math.sin(bobPhase) * .65 : 0;
     leftArm.rotation.x = swing; rightArm.rotation.x = -swing;
     leftLeg.rotation.x = -swing; rightLeg.rotation.x = swing;
+  }
+
+  viewSwing = Math.max(0, viewSwing - dt * 4.8);
+  const swingAmount = viewSwing > 0 ? Math.sin((1 - viewSwing) * Math.PI) : 0;
+  firstPersonRig.position.set(bobX * .55, -bobY * .5 - swingAmount * .12, 0);
+  firstPersonRig.rotation.set(swingAmount * .62, 0, swingAmount * .42);
+  firstPersonRig.visible = !thirdPerson && playing;
+
+  const targetFov = isSprinting && moving ? 78 : 72;
+  const nextFov = THREE.MathUtils.damp(camera.fov, targetFov, 7, dt);
+  if (Math.abs(nextFov - camera.fov) > .01) {
+    camera.fov = nextFov;
+    camera.updateProjectionMatrix();
   }
 
   camera.rotation.y = yaw;
@@ -1172,13 +1364,20 @@ function updatePlayer(dt, elapsed) {
   if (thirdPerson) {
     const forward = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
     const target = player.position.clone().add(new THREE.Vector3(0, 1.2, 0));
-    camera.position.copy(target).addScaledVector(forward, -5).add(new THREE.Vector3(0, 1.1, 0));
+    const desiredCamera = target.clone().addScaledVector(forward, -5).add(new THREE.Vector3(0, 1.1, 0));
+    const cameraOffset = desiredCamera.clone().sub(target);
+    raycaster.set(target, cameraOffset.clone().normalize());
+    raycaster.far = cameraOffset.length();
+    const obstruction = raycaster.intersectObjects(blockGroup.children, false)[0];
+    camera.position.copy(obstruction ? target.clone().addScaledVector(cameraOffset.normalize(), Math.max(.3, obstruction.distance - .18)) : desiredCamera);
     camera.lookAt(target);
     avatar3D.visible = true;
   } else {
-    camera.position.copy(player.position).add(new THREE.Vector3(0, 1.54, 0));
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    camera.position.copy(player.position).add(new THREE.Vector3(0, 1.54 + bobY - landingKick, 0)).addScaledVector(right, bobX);
     avatar3D.visible = false;
   }
+  wasGrounded = grounded;
 }
 
 function animate() {
@@ -1190,6 +1389,7 @@ function animate() {
   updateMonsters(dt, elapsed);
   updateLootCaches(elapsed);
   updateTargeting(elapsed);
+  updateBlockParticles(dt);
   cloudGroup.position.x = player.position.x + ((elapsed * .22 + 35) % 70) - 35;
   cloudGroup.position.z = player.position.z;
   renderer.render(scene, camera);
@@ -1240,8 +1440,9 @@ if (new URLSearchParams(location.search).has('debug')) {
     monsterHealth: () => monsters.map(monster => monster.health),
     spawnMonsterAhead: () => {
       clearMonsters();
-      const monster = createNightling(Math.round(player.position.x), Math.round(player.position.z - 2));
-      monster.group.position.set(player.position.x, player.position.y, player.position.z - 2);
+      nextMonsterSpawn = 999;
+      const monster = createNightling(Math.round(player.position.x), Math.round(player.position.z - 1));
+      monster.group.position.set(player.position.x, player.position.y, player.position.z - 1.25);
       return monster.health;
     },
     prepareInteractionTarget: () => {
@@ -1259,6 +1460,25 @@ if (new URLSearchParams(location.search).has('debug')) {
       }
       return [x, y, z];
     },
+    prepareCollisionWall: () => {
+      player.position.set(0, 8, 0);
+      updateWorldChunks(true);
+      player.position.y = highestSolidAt(0, 0) + .51;
+      horizontalVelocity.set(0, 0);
+      verticalVelocity = 0;
+      grounded = true;
+      thirdPerson = false;
+      yaw = 0;
+      pitch = 0;
+      const baseY = Math.floor(player.position.y + .49);
+      const wallZ = -2;
+      for (let x = -1; x <= 1; x++) for (let y = baseY; y <= baseY + 2; y++) {
+        setBlock(x, y, wallZ, 'grass');
+        refreshAround(x, y, wallZ);
+      }
+      return { wallZ, start: player.position.toArray() };
+    },
+    collides: () => collidesAt(player.position),
     blockAt: (x, y, z) => getBlock(x, y, z) || null,
     findWater: () => {
       for (const [id, type] of world) if (type === 'water') return id.split(',').map(Number);
@@ -1269,6 +1489,8 @@ if (new URLSearchParams(location.search).has('debug')) {
       updateWorldChunks(true);
       player.position.y = highestSolidAt(x, z) + .51;
       verticalVelocity = 0;
+      horizontalVelocity.set(0, 0);
+      grounded = true;
     },
   };
 }

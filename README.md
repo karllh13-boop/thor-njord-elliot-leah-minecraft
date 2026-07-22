@@ -6,6 +6,8 @@ The world streams outward in procedural chunks as the player explores. A four-mi
 
 Mining adds blocks to a persistent counted inventory and building consumes them. Procedural supply caches contain resources and tools including wood/stone picks, a trail axe, and a stone sword. The in-game PACK screen supports tool equipping and crafting recipes for sticks, tools, weapons, bricks, and block bundles.
 
+Movement uses full-body voxel collision with wall sliding, one-block step-up, ceiling and floor collision, acceleration, air control, head bob, landing response, and sprint field-of-view. First-person mode includes the selected character's arm, equipped tools, action swings, and block particles.
+
 ## Play online
 
 Open the public game link in landscape orientation on a phone, tablet, or computer. Touch controls appear automatically on mobile devices.

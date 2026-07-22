@@ -88,6 +88,18 @@ with sync_playwright() as p:
         page.wait_for_timeout(80)
         return state
 
+    # A three-block-high grass wall must stop the full player body instead of letting it phase through.
+    wall = page.evaluate("__BLOCKWORLD_DEBUG__.prepareCollisionWall()")
+    blocked = stick_drag(0, -42, 1200)
+    wall_front_limit = wall["wallZ"] + .5 + .31
+    assert blocked["position"][2] >= wall_front_limit - .03
+    assert not page.evaluate("__BLOCKWORLD_DEBUG__.collides()")
+
+    # Diagonal input should slide sideways along that wall.
+    before_slide_x = blocked["position"][0]
+    slid = stick_drag(42, -42, 260)
+    assert slid["position"][0] > before_slide_x + .08
+
     # The stick must map all four directions to different world-axis movement.
     page.evaluate("__BLOCKWORLD_DEBUG__.teleport(0, 0)")
     page.wait_for_timeout(100)
@@ -196,6 +208,6 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT / "phone-landscape.png"), full_page=True)
 
     assert not errors, "Browser errors:\n" + "\n".join(errors)
-    print("PASS: mine/build, loot cache, inventory, crafting, tools, persistence, movement, water, chunks, night combat, HUD, and rotation")
+    print("PASS: full-body wall collision, wall sliding, mine/build, loot, crafting, tuned movement, water, chunks, combat, HUD, and rotation")
     context.close()
     browser.close()
