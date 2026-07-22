@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Sans:wght@500;600;700&display=swap');
-
 :root {
   --ink: #17313b;
   --cream: #fff7dc;
@@ -18,7 +16,7 @@ html, body {
   overflow: hidden;
   background: var(--sky);
   color: var(--ink);
-  font-family: "DM Sans", sans-serif;
+  font-family: "Avenir Next", Avenir, "Trebuchet MS", sans-serif;
   touch-action: none;
   user-select: none;
 }
@@ -107,7 +105,7 @@ button { font: inherit; }
 
 h1 {
   margin: 14px auto 18px;
-  font-family: "Archivo Black", sans-serif;
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
   font-size: clamp(30px, 5.7vw, 75px);
   line-height: .86;
   letter-spacing: -.055em;
@@ -196,7 +194,7 @@ h1 strong {
 .avatar .leg.left { left: 13px; }
 .avatar .leg.right { right: 13px; }
 
-.character-card strong { display: block; font-family: "Archivo Black"; font-size: 17px; text-transform: uppercase; }
+.character-card strong { display: block; font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; font-size: 17px; text-transform: uppercase; }
 .character-card small { display: block; margin-top: 2px; font-weight: 700; font-size: 10px; opacity: .62; letter-spacing: .08em; text-transform: uppercase; }
 
 .play-button {
@@ -211,7 +209,7 @@ h1 strong {
   color: #fff;
   box-shadow: 0 8px 0 rgba(0,0,0,.25);
   cursor: pointer;
-  font-family: "Archivo Black";
+  font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
   font-size: 15px;
   letter-spacing: .05em;
   transition: transform .16s, filter .16s;
@@ -233,7 +231,7 @@ h1 strong {
 .player-badge { display: flex; align-items: center; gap: 9px; padding: 7px 13px 7px 7px; font-weight: 900; font-size: 12px; letter-spacing: .06em; }
 .player-badge i { width: 27px; height: 27px; background: var(--badge-color); border: 4px solid rgba(255,255,255,.25); }
 .world-title { margin: auto; padding: 9px 13px; font-size: 10px; font-weight: 900; letter-spacing: .14em; }
-.icon-button { pointer-events: auto; width: 36px; height: 36px; border: 0; cursor: pointer; font-family: "Archivo Black"; }
+.icon-button { pointer-events: auto; width: 36px; height: 36px; border: 0; cursor: pointer; font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; }
 
 .crosshair { position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; transform: translate(-50%,-50%); filter: drop-shadow(0 1px 1px rgba(0,0,0,.8)); }
 .crosshair i, .crosshair b { position: absolute; background: rgba(255,255,255,.96); }
@@ -247,12 +245,12 @@ h1 strong {
 .slot { position: relative; width: 50px; height: 50px; display: grid; place-items: center; border: 2px solid rgba(255,255,255,.16); background: rgba(255,255,255,.08); transition: .15s; }
 .slot.selected { border-color: var(--yellow); background: rgba(255,212,71,.15); transform: translateY(-5px); }
 .slot i { width: 25px; height: 25px; background: var(--block-color); box-shadow: inset -5px -5px 0 rgba(0,0,0,.15), inset 4px 4px 0 rgba(255,255,255,.18); }
-.slot small { position: absolute; left: 4px; top: 1px; color: #fff; font: 700 10px "DM Sans"; opacity: .7; }
+.slot small { position: absolute; left: 4px; top: 1px; color: #fff; font: 700 10px "Avenir Next", Avenir, sans-serif; opacity: .7; }
 .slot span { position: absolute; bottom: -22px; color: white; font-size: 9px; font-weight: 900; text-shadow: 0 2px 2px #000; text-transform: uppercase; opacity: 0; }
 .slot.selected span { opacity: 1; }
 
 .action-hints { position: absolute; left: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 7px; color: white; font-size: 9px; font-weight: 900; text-shadow: 0 2px 2px #000; }
-kbd { display: inline-block; padding: 3px 6px; background: rgba(19,37,43,.88); color: white; border: 1px solid rgba(255,255,255,.22); box-shadow: 0 2px 0 rgba(0,0,0,.3); font: 800 10px "DM Sans"; }
+kbd { display: inline-block; padding: 3px 6px; background: rgba(19,37,43,.88); color: white; border: 1px solid rgba(255,255,255,.22); box-shadow: 0 2px 0 rgba(0,0,0,.3); font: 800 10px "Avenir Next", Avenir, sans-serif; }
 
 .mobile-controls, .look-hint, .rotate-device { display: none; }
 
@@ -296,7 +294,7 @@ kbd { display: inline-block; padding: 3px 6px; background: rgba(19,37,43,.88); c
   color: white;
   background: rgba(23,49,59,.82);
   box-shadow: 0 5px 0 rgba(0,0,0,.28);
-  font: 900 10px "DM Sans";
+  font: 900 10px "Avenir Next", Avenir, sans-serif;
   letter-spacing: .05em;
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
@@ -310,22 +308,27 @@ kbd { display: inline-block; padding: 3px 6px; background: rgba(19,37,43,.88); c
 .look-hint { position: absolute; left: 50%; bottom: 82px; transform: translateX(-50%); padding: 6px 9px; background: rgba(23,49,59,.55); color: rgba(255,255,255,.86); font-size: 8px; font-weight: 900; letter-spacing: .09em; }
 
 .rotate-device { position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center; flex-direction: column; gap: 8px; background: #84d4f7; color: var(--ink); text-align: center; pointer-events: auto; }
-.rotate-device .phone-icon { display: grid; place-items: center; width: 55px; height: 82px; border: 7px solid var(--ink); border-radius: 9px; font: 34px "Archivo Black"; transform: rotate(-10deg); margin-bottom: 12px; animation: rotate-phone 1.8s ease-in-out infinite; }
-.rotate-device strong { font: 22px "Archivo Black"; }
+.rotate-device .phone-icon { display: grid; place-items: center; width: 55px; height: 82px; border: 7px solid var(--ink); border-radius: 9px; font: 34px Impact, Haettenschweiler, sans-serif; transform: rotate(-10deg); margin-bottom: 12px; animation: rotate-phone 1.8s ease-in-out infinite; }
+.rotate-device strong { font: 22px Impact, Haettenschweiler, sans-serif; }
 .rotate-device span { font-size: 12px; font-weight: 700; }
 @keyframes rotate-phone { 50% { transform: rotate(80deg); } }
 
 .pause-screen { background: rgba(14,32,39,.55); backdrop-filter: blur(10px); }
 .pause-card, .help-card { width: min(480px, 92vw); padding: 38px; background: var(--cream); box-shadow: 12px 12px 0 var(--orange); text-align: center; }
-.pause-card h2, .help-card h2 { margin: 12px 0 22px; font-family: "Archivo Black"; font-size: 28px; }
+.pause-card h2, .help-card h2 { margin: 12px 0 22px; font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif; font-size: 28px; }
 .pause-card .play-button { width: 100%; }
 .text-button { margin-top: 20px; border: 0; background: transparent; color: var(--ink); font-weight: 900; text-decoration: underline; cursor: pointer; }
 
 .modal { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(14,32,39,.62); backdrop-filter: blur(8px); }
 .help-card { position: relative; width: min(620px, 94vw); text-align: left; }
-.modal-close { position: absolute; right: 13px; top: 10px; border: 0; background: none; font: 30px "Archivo Black"; cursor: pointer; color: var(--ink); }
+.modal-close { position: absolute; right: 13px; top: 10px; border: 0; background: none; font: 30px Impact, Haettenschweiler, sans-serif; cursor: pointer; color: var(--ink); }
 .control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .control-grid div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; background: #ebdeb8; font-size: 12px; font-weight: 800; }
+.mobile-guide { display: none; gap: 9px; }
+.mobile-guide div { display: flex; align-items: center; gap: 11px; padding: 10px; background: #ebdeb8; }
+.mobile-guide b { display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; background: var(--orange); color: white; }
+.mobile-guide span { font-size: 11px; line-height: 1.3; }
+.mobile-guide strong { display: block; font: 11px Impact, Haettenschweiler, sans-serif; }
 
 @media (max-width: 700px) {
   .title-panel { padding: 3vh 0; }
@@ -347,6 +350,8 @@ kbd { display: inline-block; padding: 3px 6px; background: rgba(19,37,43,.88); c
   .slot i { width: 20px; height: 20px; }
   .slot span { display: none; }
   .topbar { padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 8px max(10px, env(safe-area-inset-left)); }
+  .control-grid { display: none; }
+  .mobile-guide { display: grid; }
 }
 
 @media (pointer: coarse) and (orientation: portrait) {

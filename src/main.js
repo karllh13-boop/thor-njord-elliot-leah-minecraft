@@ -26,6 +26,7 @@ const world = new Map();
 const meshes = new Map();
 const keys = Object.create(null);
 const isTouchDevice = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+const hasNativeTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 const touchMove = new THREE.Vector2();
 let movePointer = null;
 let lookPointer = null;
@@ -39,6 +40,8 @@ let yaw = 0;
 let pitch = -0.1;
 let verticalVelocity = 0;
 let grounded = false;
+let jumpQueuedUntil = 0;
+let playerInWater = false;
 let toastTimer;
 
 const canvas = document.querySelector('#game');
@@ -393,49 +396,79 @@ document.querySelector('#hotbar').addEventListener('pointerdown', (e) => {
 
 const movePad = document.querySelector('#move-pad');
 const moveStick = document.querySelector('#move-stick');
-function updateMovePad(e) {
+function updateMovePad(clientX, clientY) {
   const rect = movePad.getBoundingClientRect();
   const max = rect.width * .32;
-  let dx = e.clientX - (rect.left + rect.width / 2);
-  let dy = e.clientY - (rect.top + rect.height / 2);
+  let dx = clientX - (rect.left + rect.width / 2);
+  let dy = clientY - (rect.top + rect.height / 2);
   const length = Math.hypot(dx, dy);
   if (length > max) { dx = dx / length * max; dy = dy / length * max; }
+  if (length < max * .12) { dx = 0; dy = 0; }
   touchMove.set(dx / max, -dy / max);
   moveStick.style.transform = `translate(${dx}px, ${dy}px)`;
 }
-movePad.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  movePointer = e.pointerId;
-  movePad.setPointerCapture(e.pointerId);
-  updateMovePad(e);
-});
-movePad.addEventListener('pointermove', (e) => { if (e.pointerId === movePointer) updateMovePad(e); });
-function releaseMove(e) {
-  if (e.pointerId !== movePointer) return;
+
+function clearMove() {
   movePointer = null;
   touchMove.set(0,0);
   moveStick.style.transform = '';
 }
-movePad.addEventListener('pointerup', releaseMove);
-movePad.addEventListener('pointercancel', releaseMove);
 
-canvas.addEventListener('pointerdown', (e) => {
-  if (!isTouchDevice || e.pointerType === 'mouse') return;
-  lookPointer = e.pointerId;
-  lastLookX = e.clientX;
-  lastLookY = e.clientY;
-  canvas.setPointerCapture(e.pointerId);
-});
-canvas.addEventListener('pointermove', (e) => {
-  if (e.pointerId !== lookPointer) return;
-  yaw -= (e.clientX - lastLookX) * .008;
-  pitch -= (e.clientY - lastLookY) * .007;
+function updateTouchLook(clientX, clientY) {
+  yaw -= (clientX - lastLookX) * .008;
+  pitch -= (clientY - lastLookY) * .007;
   pitch = THREE.MathUtils.clamp(pitch, -1.42, 1.42);
-  lastLookX = e.clientX;
-  lastLookY = e.clientY;
-});
-canvas.addEventListener('pointerup', (e) => { if (e.pointerId === lookPointer) lookPointer = null; });
-canvas.addEventListener('pointercancel', (e) => { if (e.pointerId === lookPointer) lookPointer = null; });
+  lastLookX = clientX;
+  lastLookY = clientY;
+}
+
+if (hasNativeTouch) {
+  movePad.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    movePointer = touch.identifier;
+    updateMovePad(touch.clientX, touch.clientY);
+  }, { passive: false });
+  movePad.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = [...e.changedTouches].find(t => t.identifier === movePointer) || [...e.touches].find(t => t.identifier === movePointer);
+    if (touch) updateMovePad(touch.clientX, touch.clientY);
+  }, { passive: false });
+  const finishMoveTouch = (e) => {
+    if ([...e.changedTouches].some(t => t.identifier === movePointer)) clearMove();
+  };
+  movePad.addEventListener('touchend', finishMoveTouch, { passive: false });
+  movePad.addEventListener('touchcancel', finishMoveTouch, { passive: false });
+
+  canvas.addEventListener('touchstart', (e) => {
+    if (!playing || lookPointer !== null) return;
+    const touch = e.changedTouches[0];
+    lookPointer = touch.identifier;
+    lastLookX = touch.clientX;
+    lastLookY = touch.clientY;
+  }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = [...e.changedTouches].find(t => t.identifier === lookPointer) || [...e.touches].find(t => t.identifier === lookPointer);
+    if (touch) updateTouchLook(touch.clientX, touch.clientY);
+  }, { passive: false });
+  const finishLookTouch = (e) => {
+    if ([...e.changedTouches].some(t => t.identifier === lookPointer)) lookPointer = null;
+  };
+  canvas.addEventListener('touchend', finishLookTouch, { passive: false });
+  canvas.addEventListener('touchcancel', finishLookTouch, { passive: false });
+} else {
+  movePad.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    movePointer = e.pointerId;
+    movePad.setPointerCapture(e.pointerId);
+    updateMovePad(e.clientX, e.clientY);
+  });
+  movePad.addEventListener('pointermove', (e) => { if (e.pointerId === movePointer) updateMovePad(e.clientX, e.clientY); });
+  const releaseMovePointer = (e) => { if (e.pointerId === movePointer) clearMove(); };
+  movePad.addEventListener('pointerup', releaseMovePointer);
+  movePad.addEventListener('pointercancel', releaseMovePointer);
+}
 
 function bindTouchAction(id, action) {
   const button = document.querySelector(id);
@@ -443,7 +476,9 @@ function bindTouchAction(id, action) {
   button.addEventListener('pointerup', (e) => { e.preventDefault(); action(false); });
   button.addEventListener('pointercancel', () => action(false));
 }
-bindTouchAction('#touch-jump', pressed => { keys.Space = pressed; });
+bindTouchAction('#touch-jump', pressed => {
+  if (pressed) jumpQueuedUntil = performance.now() + 300;
+});
 bindTouchAction('#touch-mine', pressed => { if (pressed) mineBlock(); });
 bindTouchAction('#touch-build', pressed => { if (pressed) placeBlock(); });
 bindTouchAction('#touch-camera', pressed => {
@@ -497,12 +532,18 @@ function updatePlayer(dt, elapsed) {
   if (nextGroundZ <= oldGround + 1 || player.position.y > nextGroundZ + 1.4) player.position.z += dz;
 
   const groundBlock = highestSolidAt(player.position.x, player.position.z, player.position.y + .2);
-  const groundY = groundBlock + .51;
+  playerInWater = getBlock(Math.round(player.position.x), WATER_LEVEL, Math.round(player.position.z)) === 'water';
+  const waterFloatY = WATER_LEVEL + .2 + Math.sin(elapsed * 2.4) * .025;
+  const groundY = playerInWater ? Math.max(groundBlock + .51, waterFloatY) : groundBlock + .51;
   grounded = player.position.y <= groundY + .06 && verticalVelocity <= 0;
   if (grounded) {
     player.position.y = groundY;
     verticalVelocity = 0;
-    if (keys.Space) { verticalVelocity = 7.1; grounded = false; }
+    if (keys.Space || performance.now() < jumpQueuedUntil) {
+      verticalVelocity = playerInWater ? 5.6 : 7.1;
+      grounded = false;
+      jumpQueuedUntil = 0;
+    }
   } else {
     verticalVelocity -= 18 * dt;
     player.position.y += verticalVelocity * dt;
@@ -553,4 +594,22 @@ setupHotbar();
 generateWorld();
 camera.position.set(8, 10, 13);
 camera.lookAt(0,3,0);
+
+if (new URLSearchParams(location.search).has('debug')) {
+  window.__BLOCKWORLD_DEBUG__ = {
+    playerPosition: () => player.position.toArray(),
+    moveInput: () => touchMove.toArray(),
+    view: () => ({ yaw, pitch, thirdPerson }),
+    state: () => ({ grounded, playerInWater, worldBlocks: world.size }),
+    setView: (nextYaw, nextPitch) => { yaw = nextYaw; pitch = nextPitch; },
+    findWater: () => {
+      for (const [id, type] of world) if (type === 'water') return id.split(',').map(Number);
+      return null;
+    },
+    teleport: (x, z) => {
+      player.position.set(x, highestSolidAt(x, z) + .51, z);
+      verticalVelocity = 0;
+    },
+  };
+}
 animate();
