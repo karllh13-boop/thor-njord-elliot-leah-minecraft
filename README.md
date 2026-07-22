@@ -4,6 +4,8 @@ An original browser-based voxel sandbox made for four young explorers.
 
 The world streams outward in procedural chunks as the player explores. A four-minute day/night cycle drives sunrise, daylight, sunset, moonlight, stars, and hostile Nightlings. Nightlings can be attacked with the normal mine control, damage the player's five-heart health bar on contact, and retreat at sunrise.
 
+Mining adds blocks to a persistent counted inventory and building consumes them. Procedural supply caches contain resources and tools including wood/stone picks, a trail axe, and a stone sword. The in-game PACK screen supports tool equipping and crafting recipes for sticks, tools, weapons, bricks, and block bundles.
+
 ## Play online
 
 Open the public game link in landscape orientation on a phone, tablet, or computer. Touch controls appear automatically on mobile devices.

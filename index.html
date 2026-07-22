@@ -39,11 +39,13 @@
           <span id="time-display" class="time-display"><i>☀</i><b>DAY 1 · MORNING</b></span>
           <span id="health-display" class="health-display" aria-label="Five hearts">♥♥♥♥♥</span>
         </div>
+        <button id="pack-button" class="pack-button" aria-label="Open pack"><i>✋</i><span>PACK</span></button>
         <button id="help-button" class="icon-button" aria-label="Controls">?</button>
       </div>
       <div id="danger-banner" class="danger-banner">NIGHTLINGS ARE ROAMING</div>
       <div id="damage-flash" class="damage-flash"></div>
       <div class="crosshair" aria-hidden="true"><i></i><b></b></div>
+      <div id="target-label" class="target-label">AIM AT A BLOCK</div>
       <div id="toast" class="toast"></div>
       <div id="hotbar" class="hotbar"></div>
       <div class="action-hints">
@@ -94,7 +96,34 @@
         <div class="mobile-guide">
           <div><b>①</b><span><strong>MOVE</strong> Push the left stick in any direction. Push it to the edge to sprint.</span></div>
           <div><b>②</b><span><strong>LOOK</strong> Drag anywhere on the world with your right thumb.</span></div>
-          <div><b>③</b><span><strong>PLAY</strong> Tap JUMP, MINE, BUILD, or VIEW. Tap the bottom blocks to choose one.</span></div>
+          <div><b>③</b><span><strong>PLAY</strong> Put the crosshair on a glowing block outline, then tap MINE or BUILD.</span></div>
+          <div><b>④</b><span><strong>PACK</strong> Equip found tools, check materials, and craft new gear.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pack-modal" class="modal hidden">
+      <div class="pack-card">
+        <button id="close-pack" class="modal-close" aria-label="Close pack">×</button>
+        <div class="pack-heading">
+          <div>
+            <div class="eyebrow">EXPLORER'S PACK</div>
+            <h2>Tools, blocks &amp; crafting</h2>
+          </div>
+          <div id="equipped-summary" class="equipped-summary"></div>
+        </div>
+        <div class="pack-layout">
+          <section>
+            <h3>MATERIALS</h3>
+            <div id="material-grid" class="material-grid"></div>
+            <h3>YOUR TOOLS</h3>
+            <div id="tool-grid" class="tool-grid"></div>
+          </section>
+          <section class="craft-section">
+            <h3>CRAFTING BENCH</h3>
+            <p>Mine blocks and discover supply caches to gather ingredients.</p>
+            <div id="recipe-grid" class="recipe-grid"></div>
+          </section>
         </div>
       </div>
     </div>

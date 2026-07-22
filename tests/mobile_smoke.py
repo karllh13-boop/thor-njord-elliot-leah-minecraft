@@ -38,6 +38,42 @@ with sync_playwright() as p:
     assert page.locator("#touch-camera").is_visible()
     assert not page.locator(".rotate-device").is_visible()
 
+    # MINE must remove a targeted block and add it to counted inventory.
+    target = page.evaluate("__BLOCKWORLD_DEBUG__.prepareInteractionTarget()")
+    page.wait_for_function("() => __BLOCKWORLD_DEBUG__.aimed() !== null", timeout=3000)
+    stone_before = page.evaluate("__BLOCKWORLD_DEBUG__.inventory().stone")
+    page.locator("#touch-mine").tap()
+    page.wait_for_timeout(150)
+    assert page.evaluate("([x,y,z]) => __BLOCKWORLD_DEBUG__.blockAt(x,y,z)", target) is None
+    assert page.evaluate("__BLOCKWORLD_DEBUG__.inventory().stone") == stone_before + 1
+
+    # BUILD must place the selected block against the backstop and consume one.
+    grass_before = page.evaluate("__BLOCKWORLD_DEBUG__.inventory().grass")
+    page.locator("#touch-build").tap()
+    page.wait_for_timeout(150)
+    assert page.evaluate("([x,y,z]) => __BLOCKWORLD_DEBUG__.blockAt(x,y,z)", target) == "grass"
+    assert page.evaluate("__BLOCKWORLD_DEBUG__.inventory().grass") == grass_before - 1
+
+    # The guaranteed starter cache grants a tool and supplies when approached.
+    page.evaluate("__BLOCKWORLD_DEBUG__.teleport(4, 4)")
+    page.wait_for_timeout(350)
+    starter_tools = page.evaluate("__BLOCKWORLD_DEBUG__.tools()")
+    assert "wood_pick" in starter_tools["owned"]
+    assert starter_tools["equipped"] == "wood_pick"
+
+    # PACK crafting consumes ingredients, grants items, and equips crafted tools.
+    page.locator("#pack-button").tap()
+    assert page.locator("#pack-modal").is_visible()
+    page.locator('[data-recipe="sticks"]').tap()
+    assert page.evaluate("__BLOCKWORLD_DEBUG__.inventory().sticks") == 4
+    page.locator('[data-recipe="stone_pick"]').tap()
+    crafted_tools = page.evaluate("__BLOCKWORLD_DEBUG__.tools()")
+    assert "stone_pick" in crafted_tools["owned"]
+    assert crafted_tools["equipped"] == "stone_pick"
+    assert page.evaluate("localStorage.getItem('four-builders-progress-v1') !== null")
+    page.screenshot(path=str(OUT / "phone-pack.png"), full_page=True)
+    page.locator("#close-pack").tap()
+
     cdp = context.new_cdp_session(page)
 
     def stick_drag(dx, dy, hold_ms=420):
@@ -133,7 +169,7 @@ with sync_playwright() as p:
     assert page.evaluate("__BLOCKWORLD_DEBUG__.monsterHealth()") == [3]
     page.locator("#touch-mine").tap()
     page.wait_for_timeout(100)
-    assert page.evaluate("__BLOCKWORLD_DEBUG__.monsterHealth()[0]") == 2
+    assert page.evaluate("__BLOCKWORLD_DEBUG__.monsterHealth()[0]") == 1
     page.evaluate("__BLOCKWORLD_DEBUG__.setTime(.08)")
     page.wait_for_timeout(150)
     assert page.evaluate("__BLOCKWORLD_DEBUG__.state().monsters") == 0
@@ -160,6 +196,6 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT / "phone-landscape.png"), full_page=True)
 
     assert not errors, "Browser errors:\n" + "\n".join(errors)
-    print("PASS: touch controls, water float, chunk streaming, day/night, Nightling combat, sunrise, HUD, and rotation")
+    print("PASS: mine/build, loot cache, inventory, crafting, tools, persistence, movement, water, chunks, night combat, HUD, and rotation")
     context.close()
     browser.close()

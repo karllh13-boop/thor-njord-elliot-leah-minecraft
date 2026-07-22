@@ -19,6 +19,31 @@ const BLOCKS = {
   water: { color: 0x4bb8dd, label: 'Water' },
 };
 
+const TOOL_DEFS = {
+  hands: { name: 'Bare Hands', icon: '✋', reach: 6, damage: 1, note: 'Basic mining' },
+  wood_pick: { name: 'Wood Pick', icon: '⛏', reach: 7, damage: 1, note: '+1 stone drops' },
+  stone_pick: { name: 'Stone Pick', icon: '⛏', reach: 8, damage: 2, note: '+2 stone drops' },
+  axe: { name: 'Trail Axe', icon: '🪓', reach: 6.5, damage: 2, note: '+2 wood drops' },
+  sword: { name: 'Stone Sword', icon: '⚔', reach: 6.5, damage: 3, note: 'Heavy monster damage' },
+};
+
+const RECIPES = [
+  { id: 'sticks', name: 'Four Sticks', icon: '╫', costs: { wood: 1 }, grants: { sticks: 4 } },
+  { id: 'wood_pick', name: 'Wood Pick', icon: '⛏', costs: { wood: 3, sticks: 2 }, tool: 'wood_pick' },
+  { id: 'stone_pick', name: 'Stone Pick', icon: '⛏', costs: { stone: 3, sticks: 2 }, tool: 'stone_pick' },
+  { id: 'axe', name: 'Trail Axe', icon: '🪓', costs: { wood: 3, sticks: 2 }, tool: 'axe' },
+  { id: 'sword', name: 'Stone Sword', icon: '⚔', costs: { stone: 2, sticks: 1 }, tool: 'sword' },
+  { id: 'bricks', name: 'Four Bricks', icon: '▦', costs: { dirt: 2, stone: 2 }, grants: { brick: 4 } },
+  { id: 'builder_bundle', name: 'Builder Bundle', icon: '▣', costs: { wood: 2, stone: 2 }, grants: { grass: 4, dirt: 4, sand: 4 } },
+];
+
+const inventory = { grass: 16, dirt: 16, stone: 8, wood: 8, sand: 8, brick: 8, sticks: 0 };
+const ownedTools = new Set(['hands']);
+const collectedCaches = new Set();
+const lootCaches = [];
+const lootSpawnedChunks = new Set();
+let equippedTool = 'hands';
+
 const PLACEABLE = ['grass', 'dirt', 'stone', 'wood', 'sand', 'brick'];
 const CHUNK_SIZE = 12;
 const WATER_LEVEL = 2;
@@ -123,6 +148,15 @@ const cloudGroup = new THREE.Group();
 scene.add(cloudGroup);
 const monsterGroup = new THREE.Group();
 scene.add(monsterGroup);
+const lootGroup = new THREE.Group();
+scene.add(lootGroup);
+
+const targetOutline = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1.04, 1.04, 1.04)),
+  new THREE.LineBasicMaterial({ color: 0xffdf4f, transparent: true, opacity: .95 })
+);
+targetOutline.visible = false;
+scene.add(targetOutline);
 
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const materials = {};
@@ -209,6 +243,7 @@ function generateChunk(cx, cz) {
       if (hash(x * 3 + 19, z * 3 - 7) > .982) addTree(x, z);
     }
   }
+  spawnLootForChunk(cx, cz);
 }
 
 function renderChunk(cx, cz) {
@@ -223,6 +258,9 @@ function renderChunk(cx, cz) {
       for (let y = -3; y <= maxY; y++) refreshBlock(x, y, z);
     }
   }
+  for (const cache of lootCaches) {
+    if (cache.cx === cx && cache.cz === cz && !cache.collected) cache.group.visible = true;
+  }
 }
 
 function unloadChunk(cx, cz) {
@@ -234,6 +272,9 @@ function unloadChunk(cx, cz) {
     }
   }
   activeChunks.delete(id);
+  for (const cache of lootCaches) {
+    if (cache.cx === cx && cache.cz === cz) cache.group.visible = false;
+  }
 }
 
 function updateWorldChunks(force = false) {
@@ -282,6 +323,85 @@ function addTree(x, z) {
     }
   }
   setBlock(x, top + 2, z, 'leaves');
+}
+
+function spawnLootForChunk(cx, cz) {
+  const id = chunkKey(cx, cz);
+  if (lootSpawnedChunks.has(id)) return;
+  lootSpawnedChunks.add(id);
+  const isStarter = cx === 0 && cz === 0;
+  if (!isStarter && hash(cx * 17 + 5, cz * 29 - 11) < .68) return;
+  if (collectedCaches.has(id)) return;
+
+  const startX = cx * CHUNK_SIZE;
+  const startZ = cz * CHUNK_SIZE;
+  let x = isStarter ? 4 : startX + 2 + Math.floor(hash(cx * 7, cz * 13) * (CHUNK_SIZE - 4));
+  let z = isStarter ? 4 : startZ + 2 + Math.floor(hash(cx * 19, cz * 3) * (CHUNK_SIZE - 4));
+  for (let attempt = 0; attempt < 5 && getBlock(x, WATER_LEVEL, z) === 'water'; attempt++) {
+    x = startX + 2 + Math.floor(hash(cx * 31 + attempt, cz * 11) * (CHUNK_SIZE - 4));
+    z = startZ + 2 + Math.floor(hash(cx * 5, cz * 23 + attempt) * (CHUNK_SIZE - 4));
+  }
+  if (getBlock(x, WATER_LEVEL, z) === 'water') return;
+
+  const roll = hash(cx * 43 + 9, cz * 37 - 2);
+  const tool = isStarter ? 'wood_pick' : roll < .25 ? 'axe' : roll < .5 ? 'sword' : roll < .75 ? 'stone_pick' : 'wood_pick';
+  const grants = isStarter ? { wood: 4, stone: 3 } : roll < .5 ? { wood: 3, dirt: 4 } : { stone: 3, brick: 2 };
+  createLootCache({ id, cx, cz, x, z, tool, grants });
+}
+
+function createLootCache(data) {
+  const group = new THREE.Group();
+  const caseMaterial = new THREE.MeshLambertMaterial({ color: 0xd69b33 });
+  const bandMaterial = new THREE.MeshLambertMaterial({ color: 0x245f63 });
+  const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xffe46f, transparent: true, opacity: .72 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(.9, .5, .72), caseMaterial);
+  base.position.y = .27;
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(.94, .22, .76), caseMaterial);
+  lid.position.y = .62;
+  const band = new THREE.Mesh(new THREE.BoxGeometry(.2, .55, .77), bandMaterial);
+  band.position.y = .29;
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(.3, .08, .3), glowMaterial);
+  glow.position.y = .8;
+  group.add(base, lid, band, glow);
+  group.traverse(object => { if (object.isMesh) object.castShadow = true; });
+  const ground = highestSolidAt(data.x, data.z);
+  group.position.set(data.x, ground + .51, data.z);
+  const cache = { ...data, group, lid, glow, collected: false };
+  group.userData.cache = cache;
+  lootCaches.push(cache);
+  lootGroup.add(group);
+}
+
+function collectLootCache(cache) {
+  if (cache.collected) return;
+  cache.collected = true;
+  cache.group.visible = false;
+  collectedCaches.add(cache.id);
+  const alreadyOwned = ownedTools.has(cache.tool);
+  ownedTools.add(cache.tool);
+  for (const [material, amount] of Object.entries(cache.grants)) inventory[material] = (inventory[material] || 0) + amount;
+  if (alreadyOwned) {
+    inventory.wood += 2;
+    inventory.stone += 2;
+  } else {
+    equippedTool = cache.tool;
+  }
+  setupHotbar();
+  renderPack();
+  updatePackButton();
+  saveProgress();
+  showToast(alreadyOwned ? 'Supply cache: bonus blocks!' : `Found ${TOOL_DEFS[cache.tool].name}!`);
+}
+
+function updateLootCaches(elapsed) {
+  if (!playing) return;
+  for (const cache of lootCaches) {
+    if (cache.collected || !cache.group.visible) continue;
+    cache.glow.rotation.y = elapsed * 2.2;
+    cache.glow.position.y = .8 + Math.sin(elapsed * 3 + cache.x) * .07;
+    cache.lid.rotation.y = Math.sin(elapsed * 1.2 + cache.z) * .035;
+    if (cache.group.position.distanceTo(player.position) < 1.45) collectLootCache(cache);
+  }
 }
 
 function isExposed(x, y, z) {
@@ -497,7 +617,7 @@ function monsterFromObject(object) {
 }
 
 function damageMonster(monster) {
-  monster.health--;
+  monster.health -= TOOL_DEFS[equippedTool].damage;
   monster.group.scale.setScalar(1.14);
   setTimeout(() => monster.group.scale.setScalar(1), 90);
   if (monster.health <= 0) {
@@ -607,11 +727,103 @@ function setupCharacterCards() {
   });
 }
 
+function loadProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('four-builders-progress-v1'));
+    if (!saved) return;
+    for (const key of Object.keys(inventory)) {
+      if (Number.isFinite(saved.inventory?.[key])) inventory[key] = Math.max(0, Math.floor(saved.inventory[key]));
+    }
+    for (const tool of saved.tools || []) if (TOOL_DEFS[tool]) ownedTools.add(tool);
+    if (TOOL_DEFS[saved.equipped] && ownedTools.has(saved.equipped)) equippedTool = saved.equipped;
+    for (const id of saved.collectedCaches || []) collectedCaches.add(id);
+  } catch (error) {
+    console.warn('Could not load saved explorer progress.', error);
+  }
+}
+
+function saveProgress() {
+  localStorage.setItem('four-builders-progress-v1', JSON.stringify({
+    inventory,
+    tools: [...ownedTools],
+    equipped: equippedTool,
+    collectedCaches: [...collectedCaches],
+  }));
+}
+
+function updatePackButton() {
+  const tool = TOOL_DEFS[equippedTool];
+  document.querySelector('#pack-button').innerHTML = `<i>${tool.icon}</i><span>${tool.name.toUpperCase()}</span>`;
+}
+
+function recipeCostText(recipe) {
+  return Object.entries(recipe.costs).map(([item, amount]) => `${amount} ${item.replace('_',' ')}`).join(' · ');
+}
+
+function canCraft(recipe) {
+  if (recipe.tool && ownedTools.has(recipe.tool)) return false;
+  return Object.entries(recipe.costs).every(([item, amount]) => (inventory[item] || 0) >= amount);
+}
+
+function craftRecipe(recipeId) {
+  const recipe = RECIPES.find(item => item.id === recipeId);
+  if (!recipe || !canCraft(recipe)) return;
+  for (const [item, amount] of Object.entries(recipe.costs)) inventory[item] -= amount;
+  for (const [item, amount] of Object.entries(recipe.grants || {})) inventory[item] = (inventory[item] || 0) + amount;
+  if (recipe.tool) {
+    ownedTools.add(recipe.tool);
+    equippedTool = recipe.tool;
+    updatePackButton();
+  }
+  setupHotbar();
+  renderPack();
+  saveProgress();
+  showToast(`Crafted ${recipe.name}!`);
+}
+
+function equipTool(toolId) {
+  if (!ownedTools.has(toolId)) return;
+  equippedTool = toolId;
+  updatePackButton();
+  renderPack();
+  saveProgress();
+  showToast(`${TOOL_DEFS[toolId].name} equipped`);
+}
+
+function renderPack() {
+  const materials = [
+    ...PLACEABLE.map(type => ({ id: type, name: BLOCKS[type].label, color: BLOCKS[type].color })),
+    { id: 'sticks', name: 'Sticks', color: 0xb78043 },
+  ];
+  document.querySelector('#material-grid').innerHTML = materials.map(material => `
+    <div class="material-item" style="--material-color:#${material.color.toString(16).padStart(6,'0')}">
+      <i></i><span>${material.name}<strong>${inventory[material.id] || 0}</strong></span>
+    </div>`).join('');
+
+  document.querySelector('#tool-grid').innerHTML = [...ownedTools].map(toolId => {
+    const tool = TOOL_DEFS[toolId];
+    return `<button class="tool-card ${toolId === equippedTool ? 'selected' : ''}" data-tool="${toolId}">
+      <i>${tool.icon}</i><span><strong>${tool.name}</strong>${tool.note}</span>
+    </button>`;
+  }).join('');
+
+  document.querySelector('#recipe-grid').innerHTML = RECIPES.map(recipe => {
+    const craftable = canCraft(recipe);
+    const owned = recipe.tool && ownedTools.has(recipe.tool);
+    return `<button class="recipe-card ${craftable ? 'can-craft' : ''}" data-recipe="${recipe.id}" ${craftable ? '' : 'disabled'}>
+      <i>${recipe.icon}</i><span><strong>${recipe.name}</strong>${recipeCostText(recipe)}</span><em>${owned ? 'OWNED' : craftable ? 'CRAFT' : 'NEED ITEMS'}</em>
+    </button>`;
+  }).join('');
+
+  const equipped = TOOL_DEFS[equippedTool];
+  document.querySelector('#equipped-summary').innerHTML = `<i>${equipped.icon}</i><span>EQUIPPED<strong>${equipped.name}</strong>${equipped.note}</span>`;
+}
+
 function setupHotbar() {
   const hotbar = document.querySelector('#hotbar');
   hotbar.innerHTML = PLACEABLE.map((type, i) => `
-    <div class="slot ${i === selectedBlock ? 'selected' : ''}" data-slot="${i}" style="--block-color:#${BLOCKS[type].color.toString(16).padStart(6,'0')}">
-      <small>${i+1}</small><i></i><span>${BLOCKS[type].label}</span>
+    <div class="slot ${i === selectedBlock ? 'selected' : ''} ${inventory[type] <= 0 ? 'empty' : ''}" data-slot="${i}" style="--block-color:#${BLOCKS[type].color.toString(16).padStart(6,'0')}">
+      <small>${i+1}</small><i></i><em>${inventory[type]}</em><span>${BLOCKS[type].label}</span>
     </div>`).join('');
 }
 
@@ -671,9 +883,27 @@ document.querySelector('#close-help').addEventListener('click', () => {
   document.querySelector('#help-modal').classList.add('hidden');
   if (playing && !isTouchDevice) canvas.requestPointerLock();
 });
+document.querySelector('#pack-button').addEventListener('click', () => {
+  renderPack();
+  document.querySelector('#pack-modal').classList.remove('hidden');
+  document.exitPointerLock();
+});
+document.querySelector('#close-pack').addEventListener('click', () => {
+  document.querySelector('#pack-modal').classList.add('hidden');
+  if (playing && !isTouchDevice) canvas.requestPointerLock();
+});
+document.querySelector('#tool-grid').addEventListener('click', (event) => {
+  const tool = event.target.closest('[data-tool]');
+  if (tool) equipTool(tool.dataset.tool);
+});
+document.querySelector('#recipe-grid').addEventListener('click', (event) => {
+  const recipe = event.target.closest('[data-recipe]');
+  if (recipe) craftRecipe(recipe.dataset.recipe);
+});
 
 document.addEventListener('pointerlockchange', () => {
-  if (!isTouchDevice && playing && document.pointerLockElement !== canvas && document.querySelector('#help-modal').classList.contains('hidden')) pauseGame();
+  const noModalOpen = document.querySelector('#help-modal').classList.contains('hidden') && document.querySelector('#pack-modal').classList.contains('hidden');
+  if (!isTouchDevice && playing && document.pointerLockElement !== canvas && noModalOpen) pauseGame();
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -703,7 +933,8 @@ canvas.addEventListener('mousedown', (e) => {
   if (e.button === 2) placeBlock();
 });
 
-document.querySelector('#hotbar').addEventListener('pointerdown', (e) => {
+document.querySelector('#hotbar').addEventListener('click', (e) => {
+  e.preventDefault();
   const slot = e.target.closest('[data-slot]');
   if (slot) selectBlock(Number(slot.dataset.slot));
 });
@@ -784,54 +1015,107 @@ if (hasNativeTouch) {
   movePad.addEventListener('pointercancel', releaseMovePointer);
 }
 
-function bindTouchAction(id, action) {
+function bindTapAction(id, action) {
   const button = document.querySelector(id);
-  button.addEventListener('pointerdown', (e) => { e.preventDefault(); action(true); });
-  button.addEventListener('pointerup', (e) => { e.preventDefault(); action(false); });
-  button.addEventListener('pointercancel', () => action(false));
+  let lastTouch = 0;
+  button.addEventListener('touchend', (event) => {
+    event.preventDefault();
+    lastTouch = performance.now();
+    action();
+  }, { passive: false });
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (performance.now() - lastTouch > 450) action();
+  });
 }
-bindTouchAction('#touch-jump', pressed => {
-  if (pressed) jumpQueuedUntil = performance.now() + 300;
+bindTapAction('#touch-jump', () => {
+  jumpQueuedUntil = performance.now() + 300;
 });
-bindTouchAction('#touch-mine', pressed => { if (pressed) mineBlock(); });
-bindTouchAction('#touch-build', pressed => { if (pressed) placeBlock(); });
-bindTouchAction('#touch-camera', pressed => {
-  if (!pressed) return;
+bindTapAction('#touch-mine', mineBlock);
+bindTapAction('#touch-build', placeBlock);
+bindTapAction('#touch-camera', () => {
   thirdPerson = !thirdPerson;
   showToast(thirdPerson ? 'Explorer camera' : 'First-person camera');
 });
 
 const raycaster = new THREE.Raycaster();
-raycaster.far = 6;
-function aimedBlock() {
-  raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
-  return raycaster.intersectObjects(blockGroup.children, false)[0];
+const aimSamples = [[0,0], [0,-.055], [0,.055], [-.055,0], [.055,0]];
+function aimedBlock(centerOnly = false) {
+  raycaster.far = TOOL_DEFS[equippedTool].reach;
+  const samples = centerOnly ? aimSamples.slice(0, 1) : aimSamples;
+  for (const [x, y] of samples) {
+    raycaster.setFromCamera(new THREE.Vector2(x,y), camera);
+    const hit = raycaster.intersectObjects(blockGroup.children, false)[0];
+    if (hit) return hit;
+  }
+  return null;
+}
+
+let nextTargetScan = 0;
+function updateTargeting(elapsed) {
+  if (!playing || elapsed < nextTargetScan) return;
+  nextTargetScan = elapsed + .16;
+  const hit = aimedBlock(true);
+  const label = document.querySelector('#target-label');
+  const crosshair = document.querySelector('.crosshair');
+  if (hit) {
+    targetOutline.position.copy(hit.object.position);
+    targetOutline.visible = true;
+    label.textContent = `${BLOCKS[hit.object.userData.type].label.toUpperCase()} · READY`;
+    label.classList.add('ready');
+    crosshair.classList.add('targeted');
+  } else {
+    targetOutline.visible = false;
+    label.textContent = 'AIM AT A BLOCK';
+    label.classList.remove('ready');
+    crosshair.classList.remove('targeted');
+  }
 }
 
 function mineBlock() {
+  raycaster.far = TOOL_DEFS[equippedTool].reach;
   raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
   const monsterHit = raycaster.intersectObjects(monsterGroup.children, true)[0];
   const hit = aimedBlock();
-  if (monsterHit && monsterHit.distance <= 5.5 && (!hit || monsterHit.distance < hit.distance)) {
+  if (monsterHit && monsterHit.distance <= TOOL_DEFS[equippedTool].reach && (!hit || monsterHit.distance < hit.distance)) {
     const monster = monsterFromObject(monsterHit.object);
     if (monster) damageMonster(monster);
     return;
   }
-  if (!hit || hit.object.userData.type === 'water') return;
+  if (!hit) { showToast('Aim the crosshair at a block'); return; }
+  if (hit.object.userData.type === 'water') { showToast('Water cannot be mined'); return; }
   const {x,y,z,type} = hit.object.userData;
   world.delete(key(x,y,z));
   refreshAround(x,y,z);
-  showToast(`${BLOCKS[type].label} collected`);
+  let amount = 1;
+  if (type === 'stone' && equippedTool === 'wood_pick') amount = 2;
+  if (type === 'stone' && equippedTool === 'stone_pick') amount = 3;
+  if (type === 'wood' && equippedTool === 'axe') amount = 3;
+  if (Object.hasOwn(inventory, type)) inventory[type] += amount;
+  if (type === 'leaves') inventory.sticks += 1;
+  setupHotbar();
+  renderPack();
+  saveProgress();
+  showToast(`${BLOCKS[type].label} +${amount}`);
 }
 
 function placeBlock() {
   const hit = aimedBlock();
-  if (!hit || !hit.face) return;
+  if (!hit || !hit.face) { showToast('Aim the crosshair at a block'); return; }
+  const type = PLACEABLE[selectedBlock];
+  if ((inventory[type] || 0) <= 0) { showToast(`No ${BLOCKS[type].label} left — mine or craft more`); return; }
   const normal = hit.face.normal;
   const pos = hit.object.position.clone().add(normal).round();
-  if (Math.abs(pos.x - player.position.x) < .65 && Math.abs(pos.z - player.position.z) < .65 && pos.y < player.position.y + 1.8 && pos.y > player.position.y - .6) return;
-  setBlock(pos.x,pos.y,pos.z,PLACEABLE[selectedBlock]);
+  if (Math.abs(pos.x - player.position.x) < .65 && Math.abs(pos.z - player.position.z) < .65 && pos.y < player.position.y + 1.8 && pos.y > player.position.y - .6) { showToast('Cannot build inside your explorer'); return; }
+  const existing = getBlock(pos.x, pos.y, pos.z);
+  if (existing && existing !== 'water') { showToast('That space is already filled'); return; }
+  setBlock(pos.x,pos.y,pos.z,type);
   refreshAround(pos.x,pos.y,pos.z);
+  inventory[type]--;
+  setupHotbar();
+  renderPack();
+  saveProgress();
+  showToast(`${BLOCKS[type].label} placed`);
 }
 
 const clock = new THREE.Clock();
@@ -904,6 +1188,8 @@ function animate() {
   updateDayNight(dt);
   if (playing && (isTouchDevice || document.pointerLockElement === canvas)) updatePlayer(dt, elapsed);
   updateMonsters(dt, elapsed);
+  updateLootCaches(elapsed);
+  updateTargeting(elapsed);
   cloudGroup.position.x = player.position.x + ((elapsed * .22 + 35) % 70) - 35;
   cloudGroup.position.z = player.position.z;
   renderer.render(scene, camera);
@@ -916,7 +1202,10 @@ addEventListener('resize', () => {
 });
 
 setupCharacterCards();
+loadProgress();
 setupHotbar();
+renderPack();
+updatePackButton();
 generateWorld();
 camera.position.set(8, 10, 13);
 camera.lookAt(0,3,0);
@@ -924,6 +1213,11 @@ camera.lookAt(0,3,0);
 if (new URLSearchParams(location.search).has('debug')) {
   window.__BLOCKWORLD_DEBUG__ = {
     playerPosition: () => player.position.toArray(),
+    cameraState: () => ({ position: camera.position.toArray(), rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z] }),
+    aimed: () => {
+      const hit = aimedBlock();
+      return hit ? { position: hit.object.position.toArray(), type: hit.object.userData.type, distance: hit.distance } : null;
+    },
     moveInput: () => touchMove.toArray(),
     view: () => ({ yaw, pitch, thirdPerson }),
     state: () => ({
@@ -937,16 +1231,35 @@ if (new URLSearchParams(location.search).has('debug')) {
       nightActive,
       monsters: monsters.length,
       health,
+      lootCaches: lootCaches.filter(cache => !cache.collected).length,
     }),
+    inventory: () => ({ ...inventory }),
+    tools: () => ({ owned: [...ownedTools], equipped: equippedTool }),
     setView: (nextYaw, nextPitch) => { yaw = nextYaw; pitch = nextPitch; },
     setTime: (time) => { worldTime = ((time % 1) + 1) % 1; updateDayNight(0); nextMonsterSpawn = 0; },
     monsterHealth: () => monsters.map(monster => monster.health),
     spawnMonsterAhead: () => {
       clearMonsters();
-      const monster = createNightling(Math.round(player.position.x), Math.round(player.position.z - 3));
-      monster.group.position.set(player.position.x, player.position.y, player.position.z - 3);
+      const monster = createNightling(Math.round(player.position.x), Math.round(player.position.z - 2));
+      monster.group.position.set(player.position.x, player.position.y, player.position.z - 2);
       return monster.health;
     },
+    prepareInteractionTarget: () => {
+      thirdPerson = false;
+      yaw = 0;
+      pitch = 0;
+      const x = Math.round(player.position.x);
+      const y = Math.floor(player.position.y + 1.54);
+      const z = Math.round(player.position.z - 3);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        setBlock(x + dx, y + dy, z, 'stone');
+        setBlock(x + dx, y + dy, z - 1, 'stone');
+        refreshAround(x + dx, y + dy, z);
+        refreshAround(x + dx, y + dy, z - 1);
+      }
+      return [x, y, z];
+    },
+    blockAt: (x, y, z) => getBlock(x, y, z) || null,
     findWater: () => {
       for (const [id, type] of world) if (type === 'water') return id.split(',').map(Number);
       return null;
