@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#87cdf0" />
+    <meta name="description" content="A handmade voxel adventure for Thor, Njord, Elliot and Leah." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%2358a84f' d='M4 4h56v56H4z'/%3E%3Cpath fill='%238b5b36' d='M4 29h56v31H4z'/%3E%3Cpath fill='%236ec45c' d='M4 4h56v25H4z'/%3E%3C/svg%3E" />
+    <title>Thor, Njord, Elliot & Leah's Minecraft</title>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="title-screen" class="screen">
+      <div class="sun-orbit" aria-hidden="true"></div>
+      <main class="title-panel">
+        <div class="eyebrow">A BLOCK-BY-BLOCK ADVENTURE</div>
+        <h1>
+          <span>THOR, NJORD,</span>
+          <span>ELLIOT <i>&amp;</i> LEAH'S</span>
+          <strong>MINECRAFT</strong>
+        </h1>
+        <p class="choose-label">CHOOSE YOUR EXPLORER</p>
+        <div id="character-grid" class="character-grid" role="list"></div>
+        <button id="play-button" class="play-button" disabled>
+          <span>ENTER THE WORLD</span><b>→</b>
+        </button>
+        <p class="menu-tip">Every world begins with one brave little builder.</p>
+      </main>
+      <div class="hill hill-left" aria-hidden="true"></div>
+      <div class="hill hill-right" aria-hidden="true"></div>
+    </div>
+
+    <div id="hud" class="hud hidden">
+      <div class="topbar">
+        <div id="player-badge" class="player-badge"></div>
+        <div class="world-title">THE FOUR BUILDERS' WORLD</div>
+        <button id="help-button" class="icon-button" aria-label="Controls">?</button>
+      </div>
+      <div class="crosshair" aria-hidden="true"><i></i><b></b></div>
+      <div id="toast" class="toast"></div>
+      <div id="hotbar" class="hotbar"></div>
+      <div class="action-hints">
+        <span><kbd>CLICK</kbd> MINE</span>
+        <span><kbd>RIGHT CLICK</kbd> BUILD</span>
+        <span><kbd>T</kbd> CAMERA</span>
+      </div>
+      <div id="mobile-controls" class="mobile-controls" aria-label="Touch controls">
+        <div id="move-pad" class="move-pad" aria-label="Move">
+          <div class="move-arrows">▲<span>◀</span><span>▶</span>▼</div>
+          <i id="move-stick"></i>
+        </div>
+        <div class="touch-actions">
+          <button id="touch-camera" class="touch-button small" aria-label="Switch camera">VIEW</button>
+          <button id="touch-mine" class="touch-button mine" aria-label="Mine block">MINE</button>
+          <button id="touch-build" class="touch-button build" aria-label="Place block">BUILD</button>
+          <button id="touch-jump" class="touch-button jump" aria-label="Jump">JUMP</button>
+        </div>
+      </div>
+      <div class="look-hint">DRAG THE WORLD TO LOOK AROUND</div>
+      <div class="rotate-device"><div class="phone-icon">↻</div><strong>Turn your phone sideways</strong><span>This world is bigger in landscape.</span></div>
+    </div>
+
+    <div id="pause-screen" class="screen pause-screen hidden">
+      <div class="pause-card">
+        <div class="eyebrow">ADVENTURE PAUSED</div>
+        <h2>Catch your breath.</h2>
+        <button id="resume-button" class="play-button"><span>BACK TO BUILDING</span><b>→</b></button>
+        <button id="change-character" class="text-button">Change explorer</button>
+      </div>
+    </div>
+
+    <div id="help-modal" class="modal hidden">
+      <div class="help-card">
+        <button id="close-help" class="modal-close">×</button>
+        <div class="eyebrow">HOW TO PLAY</div>
+        <h2>Builder's field guide</h2>
+        <div class="control-grid">
+          <div><kbd>W A S D</kbd><span>Move around</span></div>
+          <div><kbd>SPACE</kbd><span>Jump</span></div>
+          <div><kbd>SHIFT</kbd><span>Sprint</span></div>
+          <div><kbd>MOUSE</kbd><span>Look around</span></div>
+          <div><kbd>LEFT CLICK</kbd><span>Break a block</span></div>
+          <div><kbd>RIGHT CLICK</kbd><span>Place a block</span></div>
+          <div><kbd>1—6</kbd><span>Choose a block</span></div>
+          <div><kbd>T</kbd><span>Switch camera</span></div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
